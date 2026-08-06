@@ -1,0 +1,4 @@
+pandas
+readabs
+yfinance
+xlrd
