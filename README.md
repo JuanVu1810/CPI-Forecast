@@ -64,6 +64,53 @@ Downloaded data is saved under `dataset/`, separated into `abs/`, `rba/`, and `m
 
 This update makes the project easier to extend from a univariate SARIMA model into a future multivariate forecasting project, where CPI could be modelled together with labour market, interest rate, exchange rate, commodity, and oil price indicators.
 
+## Why Add More Variables?
+
+The first version of the project uses only historical CPI values. This is useful for capturing trend and seasonality, but it limits the model because CPI is affected by broader economic conditions. During unusual periods, such as the post-COVID inflation surge, a univariate SARIMA model may underperform because it cannot observe external shocks or policy changes.
+
+The additional variables are included because they represent possible drivers of inflation:
+
+- **Unemployment rate:** captures labour market tightness. Lower unemployment can increase wage pressure and demand.
+- **Wage Price Index:** measures wage growth, which can affect business costs and household spending.
+- **Producer Price Index:** captures upstream price pressure before it reaches consumers.
+- **Household spending:** measures demand-side pressure in the economy.
+- **RBA cash rate:** represents monetary policy, which can influence inflation with a delay.
+- **AUD/USD exchange rate:** affects import prices and imported inflation.
+- **Inflation expectations:** captures forward-looking views about future inflation.
+- **Commodity prices and oil prices:** capture energy, fuel, transport, and global supply-cost pressure.
+
+Adding these variables should help the next version of the project move beyond "CPI depends only on past CPI" toward a more realistic economic forecasting model.
+
+## Next Development Plan
+
+The next stage of the project will extend `cpi_forecast_V1.ipynb` into a second modelling version. The planned improvements are:
+
+1. **Build a merged modelling dataset**
+
+   Combine CPI with the downloaded ABS, RBA, and market variables. Since the data comes at different frequencies, the monthly and daily variables will need to be converted to quarterly frequency before modelling.
+
+2. **Create lagged economic features**
+
+   Many economic variables affect inflation with a delay. For example, interest rate changes, wage growth, exchange rate movements, and oil price shocks may influence CPI one or more quarters later. The next version will create lagged features such as 1-quarter, 2-quarter, and 4-quarter lags.
+
+3. **Compare SARIMA with SARIMAX**
+
+   The current model is SARIMA, which only uses past CPI. The next model will test SARIMAX, which allows external variables. This will help evaluate whether macroeconomic indicators improve CPI forecast accuracy.
+
+4. **Add stronger benchmark models**
+
+   The project will compare SARIMAX against simpler benchmarks such as seasonal naive forecasting and possibly ETS/exponential smoothing. This makes the evaluation stronger because the final model must prove that it improves on simpler alternatives.
+
+5. **Use rolling-window validation**
+
+   Time-series models should be evaluated in chronological order. The next version will continue using rolling-window validation so the model is tested in a realistic forecasting setting.
+
+6. **Interpret which variables matter**
+
+   The final model should not only forecast CPI, but also explain which indicators appear useful. This will make the project more attractive for a CV because it connects modelling results to economic reasoning.
+
+The goal of the next version is to turn the project from a univariate CPI forecasting assignment into a more complete inflation forecasting pipeline using real external economic indicators.
+
 ## Repository Structure
 
 ```text
@@ -73,7 +120,8 @@ This update makes the project easier to extend from a univariate SARIMA model in
 ├── CPI_forecast.csv            # Forecast output from the notebook
 ├── data_retrieval.py           # Updated data download pipeline
 ├── requirements-data.txt       # Packages needed for data retrieval
-└── dataset/                    # Downloaded ABS, RBA, and market datasets
+├── dataset/                    # Downloaded ABS, RBA, and market datasets
+└── README.md                   # Project summary and development plan
 ```
 
 ## Running the Data Retrieval Script
@@ -98,4 +146,4 @@ python data_retrieval.py 1995 2025 --output-dir dataset
 
 ## Notes
 
-The notebook is the main submitted university project. The newer `data_retrieval.py` script is an update that improves reproducibility and prepares the repository for future model extensions using external economic indicators.
+The notebook is the main submitted university project. The newer `data_retrieval.py` script is an update that improves reproducibility and prepares the repository for future model extensions using external economic indicators. The next modelling step is expected to be a new notebook or script that merges these datasets and tests whether external variables improve forecast performance.
