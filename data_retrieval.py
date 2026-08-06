@@ -1,0 +1,576 @@
+"""Download Australian macroeconomic indicators for a chosen year range.
+
+Required packages
+-----------------
+    python -m pip install "readabs>=0.2.5" pandas yfinance
+
+Example
+-------
+    python data_retrieval.py 1995 2025
+    python data_retrieval.py 2005 2024 --output-dir dataset
+
+The start and end years are inclusive.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterable
+
+import pandas as pd
+import readabs as ra
+import yfinance as yf
+
+
+# Exact ABS series are used so the script does not download and save every
+# series in each catalogue. These identify the intended Australia-wide series.
+ABS_SERIES: dict[str, dict[str, str]] = {
+    "cpi_index": {
+        "catalogue": "6401.0",
+        "series_id": "A2325846C",
+        # Since the ABS moved quarterly CPI to Table 17, the CPI landing page
+        # also contains a conversion-factor workbook without a standard
+        # time-series "Index" sheet. Restricting readabs to 6401017 avoids
+        # parsing that auxiliary workbook.
+        "single_excel_only": "6401017",
+        "title": "Consumer Price Index: All groups CPI, Australia, quarterly",
+    },
+    "unemployment_rate": {
+        "catalogue": "6202.0",
+        "series_id": "A84423050A",
+        "single_excel_only": "62020001",
+        "title": "Unemployment rate: Persons, Australia, seasonally adjusted",
+    },
+    "wage_price_index": {
+        "catalogue": "6345.0",
+        "series_id": "A2603609J",
+        "single_excel_only": "634501",
+        "title": (
+            "Wage Price Index: Total hourly rates of pay excluding bonuses, "
+            "private and public, all industries, Australia"
+        ),
+    },
+    "producer_price_index": {
+        "catalogue": "6427.0",
+        "series_id": "A2314865F",
+        "single_excel_only": "642701",
+        "title": "Producer Price Index: Final demand, index number",
+    },
+    "household_spending": {
+        "catalogue": "5682.0",
+        "series_id": "A130200584T",
+        "single_excel_only": "5682001",
+        "title": (
+            "Monthly Household Spending Indicator: Total household spending, "
+            "Australia, current price, seasonally adjusted"
+        ),
+    },
+}
+
+# RBA table retrieval remains appropriate because G3 and I2 contain several
+# related measures. The selector narrows F11 to AUD/USD and retains all useful
+# matching measures from G3 and I2. If metadata labels change, the script saves
+# the full requested RBA table rather than silently returning no data.
+RBA_TABLES: dict[str, dict[str, Any]] = {
+    "aud_usd_exchange_rate": {
+        "table": "Z:F11.1-Monthly",  # Monthly exchange rates; F11.1 is the daily table.
+        "title": "AUD/USD exchange rate",
+        "series_ids": ("FXRUSD",),
+        "keyword_groups": (
+            ("united states", "dollar"),
+            ("usd",),
+        ),
+        "allow_full_table_fallback": False,
+    },
+    "inflation_expectations": {
+        "table": "G3",
+        "title": "Inflation expectations",
+        "series_ids": (),
+        "keyword_groups": (
+            ("inflation", "expect"),
+            ("consumer", "inflation"),
+            ("market", "inflation"),
+        ),
+        "allow_full_table_fallback": True,
+    },
+    "commodity_prices": {
+        "table": "I2",
+        "title": "RBA commodity price indexes",
+        "series_ids": (),
+        "keyword_groups": (
+            ("commodity", "price"),
+            ("index of commodity prices",),
+        ),
+        "allow_full_table_fallback": True,
+    },
+}
+
+YFINANCE_TICKERS: dict[str, dict[str, str]] = {
+    "wti_crude_oil": {
+        "ticker": "CL=F",
+        "title": "WTI crude oil futures",
+    },
+    "brent_crude_oil": {
+        "ticker": "BZ=F",
+        "title": "Brent crude oil futures",
+    },
+}
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Download ABS, RBA and oil-market data using readabs, pandas "
+            "and yfinance. The start and end years are inclusive."
+        )
+    )
+    parser.add_argument("start_year", type=int, help="First year to retain.")
+    parser.add_argument("end_year", type=int, help="Last year to retain.")
+    parser.add_argument(
+        "--output-dir",
+        default="dataset",
+        help="Directory for downloaded CSV files. Default: dataset",
+    )
+    parser.add_argument(
+        "--oil-tickers",
+        nargs="*",
+        choices=tuple(YFINANCE_TICKERS),
+        default=list(YFINANCE_TICKERS),
+        metavar="NAME",
+        help=(
+            "Oil series downloaded with yfinance. Choices: "
+            f"{', '.join(YFINANCE_TICKERS)}. Default: both."
+        ),
+    )
+    parser.add_argument(
+        "--no-metadata",
+        action="store_true",
+        help="Do not save ABS/RBA metadata CSV files.",
+    )
+    return parser.parse_args()
+
+
+def validate_years(start_year: int, end_year: int) -> None:
+    current_year = datetime.now().year
+
+    if start_year < 1900:
+        raise ValueError("start_year must be 1900 or later.")
+    if end_year < start_year:
+        raise ValueError("end_year must be greater than or equal to start_year.")
+    if end_year > current_year:
+        raise ValueError(
+            f"end_year cannot be later than the current year ({current_year})."
+        )
+
+
+def flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert MultiIndex columns, including yfinance output, to plain strings."""
+    result = df.copy()
+
+    if isinstance(result.columns, pd.MultiIndex):
+        result.columns = [
+            "_".join(str(part) for part in column if str(part) not in {"", "None"})
+            for column in result.columns.to_flat_index()
+        ]
+    else:
+        result.columns = [str(column) for column in result.columns]
+
+    return result
+
+
+def filter_years(
+    data: pd.DataFrame | pd.Series,
+    start_year: int,
+    end_year: int,
+) -> pd.DataFrame:
+    """Filter a time series by inclusive calendar years.
+
+    The function deliberately examines only a PeriodIndex, DatetimeIndex, or a
+    clearly named date column. It never attempts to parse arbitrary numeric
+    value columns as dates.
+    """
+    result = data.to_frame(name=data.name or "value") if isinstance(data, pd.Series) else data.copy()
+
+    if isinstance(result.index, pd.PeriodIndex):
+        mask = (result.index.year >= start_year) & (result.index.year <= end_year)
+        result = result.loc[mask]
+        result.index = result.index.to_timestamp(how="start")
+        result.index.name = "date"
+        return flatten_columns(result.reset_index())
+
+    if isinstance(result.index, pd.DatetimeIndex):
+        mask = (result.index.year >= start_year) & (result.index.year <= end_year)
+        result = result.loc[mask]
+        result.index.name = result.index.name or "date"
+        return flatten_columns(result.reset_index())
+
+    date_column = next(
+        (
+            column
+            for column in result.columns
+            if str(column).strip().lower() in {"date", "time", "period"}
+        ),
+        None,
+    )
+    if date_column is None:
+        raise ValueError(
+            "No PeriodIndex, DatetimeIndex, or clearly named date column was found."
+        )
+
+    dates = pd.to_datetime(result[date_column], errors="raise")
+    mask = dates.dt.year.between(start_year, end_year, inclusive="both")
+    result = result.loc[mask].copy()
+    result[date_column] = dates.loc[mask]
+    return flatten_columns(result.reset_index(drop=True))
+
+
+def save_csv(df: pd.DataFrame, path: Path) -> dict[str, Any]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False)
+    return {"file": str(path), "rows": len(df), "columns": list(df.columns)}
+
+
+def save_metadata(metadata: Any, path: Path) -> dict[str, Any] | None:
+    """Save metadata without applying the requested observation-year filter."""
+    if metadata is None:
+        return None
+
+    if isinstance(metadata, pd.Series):
+        metadata = metadata.to_frame(name=metadata.name or "value")
+    if not isinstance(metadata, pd.DataFrame):
+        return None
+
+    return save_csv(flatten_columns(metadata.reset_index(drop=True)), path)
+
+
+def standardise_single_series(
+    data: pd.DataFrame | pd.Series,
+    variable_name: str,
+) -> pd.DataFrame | pd.Series:
+    if isinstance(data, pd.Series):
+        return data.rename(variable_name)
+
+    result = data.copy()
+    if result.shape[1] == 1:
+        result.columns = [variable_name]
+    return result
+
+
+def download_abs_series(
+    output_dir: Path,
+    start_year: int,
+    end_year: int,
+    save_meta: bool,
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    abs_dir = output_dir / "abs"
+
+    for variable_name, source in ABS_SERIES.items():
+        print(f"ABS: {source['title']}", flush=True)
+        try:
+            read_kwargs: dict[str, Any] = {
+                # Continue past non-time-series auxiliary workbooks that may
+                # appear on an ABS publication page.
+                "ignore_errors": True,
+            }
+            if source.get("single_excel_only"):
+                read_kwargs["single_excel_only"] = source["single_excel_only"]
+
+            data, metadata = ra.read_abs_series(
+                cat=source["catalogue"],
+                series_id=source["series_id"],
+                **read_kwargs,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not retrieve ABS series {source['series_id']} "
+                f"from catalogue {source['catalogue']}: {exc}"
+            ) from exc
+
+        data = standardise_single_series(data, variable_name)
+        filtered = filter_years(data, start_year, end_year)
+        data_record = save_csv(
+            filtered,
+            abs_dir / f"{variable_name}_{start_year}_{end_year}.csv",
+        )
+
+        metadata_record = None
+        if save_meta:
+            metadata_record = save_metadata(
+                metadata,
+                abs_dir / f"{variable_name}_metadata.csv",
+            )
+
+        records.append(
+            {
+                "variable": variable_name,
+                **source,
+                "data": data_record,
+                "metadata": metadata_record,
+            }
+        )
+
+    return records
+
+
+def _normalise(value: Any) -> str:
+    return " ".join(str(value).lower().replace("_", " ").split())
+
+
+def _contains_keyword_group(text: str, groups: Iterable[Iterable[str]]) -> bool:
+    return any(all(_normalise(term) in text for term in group) for group in groups)
+
+
+def _column_lookup(df: pd.DataFrame) -> dict[str, Any]:
+    return {_normalise(column): column for column in df.columns}
+
+
+def select_rba_columns(
+    data: pd.DataFrame | pd.Series,
+    metadata: Any,
+    series_ids: Iterable[str],
+    keyword_groups: Iterable[Iterable[str]],
+    allow_full_table_fallback: bool,
+) -> pd.DataFrame:
+    """Select relevant RBA columns using IDs, metadata text, then labels.
+
+    readabs/RBA metadata layouts can vary by table. This function does not rely
+    on a hard-coded metadata column name; instead, it detects metadata values
+    that match actual data-column IDs.
+    """
+    frame = data.to_frame(name=data.name or "value") if isinstance(data, pd.Series) else data.copy()
+    frame = flatten_columns(frame)
+    lookup = _column_lookup(frame)
+    selected: list[Any] = []
+
+    # First preference: known exact RBA series identifiers.
+    requested_ids = {_normalise(series_id) for series_id in series_ids}
+    selected.extend(lookup[series_id] for series_id in requested_ids if series_id in lookup)
+
+    # Second preference: metadata rows whose text matches the requested concept.
+    if isinstance(metadata, pd.DataFrame) and not metadata.empty:
+        meta = flatten_columns(metadata.reset_index(drop=True))
+        for _, row in meta.iterrows():
+            row_values = [_normalise(value) for value in row.tolist()]
+            row_text = " | ".join(row_values)
+            if not _contains_keyword_group(row_text, keyword_groups):
+                continue
+
+            for value in row_values:
+                if value in lookup:
+                    selected.append(lookup[value])
+
+    # Third preference: descriptive column labels.
+    for normalised, original in lookup.items():
+        if _contains_keyword_group(normalised, keyword_groups):
+            selected.append(original)
+
+    # Preserve source order and remove duplicates.
+    selected_set = set(selected)
+    selected = [column for column in frame.columns if column in selected_set]
+
+    if selected:
+        return frame[selected]
+    if allow_full_table_fallback:
+        print(
+            "  Warning: no unique RBA columns matched; saving the full table.",
+            flush=True,
+        )
+        return frame
+
+    raise ValueError(
+        "No matching RBA series was found. Inspect the saved/returned RBA "
+        "metadata or run readabs.print_rba_catalogue() to confirm the table."
+    )
+
+
+def download_rba_data(
+    output_dir: Path,
+    start_year: int,
+    end_year: int,
+    save_meta: bool,
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    rba_dir = output_dir / "rba"
+
+    print("RBA: Official Cash Rate", flush=True)
+    try:
+        cash_rate = ra.read_rba_ocr(monthly=True)
+    except Exception as exc:
+        raise RuntimeError(f"Could not retrieve the RBA cash rate: {exc}") from exc
+
+    cash_rate = standardise_single_series(cash_rate, "cash_rate")
+    cash_filtered = filter_years(cash_rate, start_year, end_year)
+    records.append(
+        {
+            "variable": "cash_rate",
+            "table": "OCR",
+            "title": "Official Cash Rate, monthly",
+            "data": save_csv(
+                cash_filtered,
+                rba_dir / f"cash_rate_{start_year}_{end_year}.csv",
+            ),
+            "metadata": None,
+        }
+    )
+
+    for variable_name, source in RBA_TABLES.items():
+        print(f"RBA {source['table']}: {source['title']}", flush=True)
+        try:
+            data, metadata = ra.read_rba_table(source["table"])
+            selected = select_rba_columns(
+                data=data,
+                metadata=metadata,
+                series_ids=source["series_ids"],
+                keyword_groups=source["keyword_groups"],
+                allow_full_table_fallback=source["allow_full_table_fallback"],
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not retrieve/select RBA table {source['table']}: {exc}"
+            ) from exc
+
+        filtered = filter_years(selected, start_year, end_year)
+        data_record = save_csv(
+            filtered,
+            rba_dir / f"{variable_name}_{start_year}_{end_year}.csv",
+        )
+
+        metadata_record = None
+        if save_meta:
+            metadata_record = save_metadata(
+                metadata,
+                rba_dir / f"{variable_name}_metadata.csv",
+            )
+
+        records.append(
+            {
+                "variable": variable_name,
+                "table": source["table"],
+                "title": source["title"],
+                "data": data_record,
+                "metadata": metadata_record,
+            }
+        )
+
+    return records
+
+
+def download_yfinance_data(
+    output_dir: Path,
+    start_year: int,
+    end_year: int,
+    selected_names: Iterable[str],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    market_dir = output_dir / "market"
+
+    # yfinance start is inclusive and end is exclusive, so using 1 January of
+    # the following year includes every observation from end_year.
+    start_date = f"{start_year}-01-01"
+    end_exclusive = f"{end_year + 1}-01-01"
+
+    for variable_name in selected_names:
+        source = YFINANCE_TICKERS[variable_name]
+        print(f"yfinance {source['ticker']}: {source['title']}", flush=True)
+        try:
+            data = yf.download(
+                source["ticker"],
+                start=start_date,
+                end=end_exclusive,
+                interval="1d",
+                auto_adjust=False,
+                progress=False,
+                multi_level_index=False,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not retrieve yfinance ticker {source['ticker']}: {exc}"
+            ) from exc
+
+        if data is None or data.empty:
+            raise RuntimeError(
+                f"yfinance returned no observations for {source['ticker']} "
+                f"between {start_date} and {end_exclusive}."
+            )
+
+        # The API dates already use the requested bounds, but filtering again
+        # provides a consistent inclusive-year guarantee.
+        filtered = filter_years(data, start_year, end_year)
+        records.append(
+            {
+                "variable": variable_name,
+                **source,
+                "data": save_csv(
+                    filtered,
+                    market_dir / f"{variable_name}_{start_year}_{end_year}.csv",
+                ),
+            }
+        )
+
+    return records
+
+
+def main() -> int:
+    args = parse_args()
+
+    try:
+        validate_years(args.start_year, args.end_year)
+    except ValueError as exc:
+        print(f"Input error: {exc}", file=sys.stderr)
+        return 2
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest: dict[str, Any] = {
+        "downloaded_at_utc": datetime.now(timezone.utc).isoformat(),
+        "python_version": sys.version,
+        "packages": {
+            "pandas": pd.__version__,
+            "readabs": getattr(ra, "__version__", "unknown"),
+            "yfinance": getattr(yf, "__version__", "unknown"),
+        },
+        "start_year": args.start_year,
+        "end_year": args.end_year,
+        "abs": [],
+        "rba": [],
+        "yfinance": [],
+    }
+
+    try:
+        manifest["abs"] = download_abs_series(
+            output_dir=output_dir,
+            start_year=args.start_year,
+            end_year=args.end_year,
+            save_meta=not args.no_metadata,
+        )
+        manifest["rba"] = download_rba_data(
+            output_dir=output_dir,
+            start_year=args.start_year,
+            end_year=args.end_year,
+            save_meta=not args.no_metadata,
+        )
+        manifest["yfinance"] = download_yfinance_data(
+            output_dir=output_dir,
+            start_year=args.start_year,
+            end_year=args.end_year,
+            selected_names=args.oil_tickers,
+        )
+    except (RuntimeError, ValueError) as exc:
+        print(f"Download failed: {exc}", file=sys.stderr)
+        return 1
+
+    manifest_path = output_dir / "download_manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    print(f"\nFinished. Manifest saved to: {manifest_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

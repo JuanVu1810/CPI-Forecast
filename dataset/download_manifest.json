@@ -1,0 +1,350 @@
+{
+  "downloaded_at_utc": "2026-08-06T05:57:45.495164+00:00",
+  "python_version": "3.11.15 (main, Jun 11 2026, 15:20:16) [GCC 14.3.0]",
+  "packages": {
+    "pandas": "3.0.5",
+    "readabs": "0.2.5",
+    "yfinance": "1.5.2"
+  },
+  "start_year": 1995,
+  "end_year": 2025,
+  "abs": [
+    {
+      "variable": "cpi_index",
+      "catalogue": "6401.0",
+      "series_id": "A2325846C",
+      "single_excel_only": "6401017",
+      "title": "Consumer Price Index: All groups CPI, Australia, quarterly",
+      "data": {
+        "file": "dataset/abs/cpi_index_1995_2025.csv",
+        "rows": 124,
+        "columns": [
+          "date",
+          "cpi_index"
+        ]
+      },
+      "metadata": {
+        "file": "dataset/abs/cpi_index_metadata.csv",
+        "rows": 1,
+        "columns": [
+          "Data Item Description",
+          "Series Type",
+          "Series ID",
+          "Series Start",
+          "Series End",
+          "No. Obs.",
+          "Unit",
+          "Data Type",
+          "Freq.",
+          "Collection Month",
+          "Table",
+          "Table Description",
+          "Catalogue number"
+        ]
+      }
+    },
+    {
+      "variable": "unemployment_rate",
+      "catalogue": "6202.0",
+      "series_id": "A84423050A",
+      "single_excel_only": "62020001",
+      "title": "Unemployment rate: Persons, Australia, seasonally adjusted",
+      "data": {
+        "file": "dataset/abs/unemployment_rate_1995_2025.csv",
+        "rows": 372,
+        "columns": [
+          "date",
+          "unemployment_rate"
+        ]
+      },
+      "metadata": {
+        "file": "dataset/abs/unemployment_rate_metadata.csv",
+        "rows": 1,
+        "columns": [
+          "Data Item Description",
+          "Series Type",
+          "Series ID",
+          "Series Start",
+          "Series End",
+          "No. Obs.",
+          "Unit",
+          "Data Type",
+          "Freq.",
+          "Collection Month",
+          "Table",
+          "Table Description",
+          "Catalogue number"
+        ]
+      }
+    },
+    {
+      "variable": "wage_price_index",
+      "catalogue": "6345.0",
+      "series_id": "A2603609J",
+      "single_excel_only": "634501",
+      "title": "Wage Price Index: Total hourly rates of pay excluding bonuses, private and public, all industries, Australia",
+      "data": {
+        "file": "dataset/abs/wage_price_index_1995_2025.csv",
+        "rows": 114,
+        "columns": [
+          "date",
+          "wage_price_index"
+        ]
+      },
+      "metadata": {
+        "file": "dataset/abs/wage_price_index_metadata.csv",
+        "rows": 1,
+        "columns": [
+          "Data Item Description",
+          "Series Type",
+          "Series ID",
+          "Series Start",
+          "Series End",
+          "No. Obs.",
+          "Unit",
+          "Data Type",
+          "Freq.",
+          "Collection Month",
+          "Table",
+          "Table Description",
+          "Catalogue number"
+        ]
+      }
+    },
+    {
+      "variable": "producer_price_index",
+      "catalogue": "6427.0",
+      "series_id": "A2314865F",
+      "single_excel_only": "642701",
+      "title": "Producer Price Index: Final demand, index number",
+      "data": {
+        "file": "dataset/abs/producer_price_index_1995_2025.csv",
+        "rows": 110,
+        "columns": [
+          "date",
+          "producer_price_index"
+        ]
+      },
+      "metadata": {
+        "file": "dataset/abs/producer_price_index_metadata.csv",
+        "rows": 1,
+        "columns": [
+          "Data Item Description",
+          "Series Type",
+          "Series ID",
+          "Series Start",
+          "Series End",
+          "No. Obs.",
+          "Unit",
+          "Data Type",
+          "Freq.",
+          "Collection Month",
+          "Table",
+          "Table Description",
+          "Catalogue number"
+        ]
+      }
+    },
+    {
+      "variable": "household_spending",
+      "catalogue": "5682.0",
+      "series_id": "A130200584T",
+      "single_excel_only": "5682001",
+      "title": "Monthly Household Spending Indicator: Total household spending, Australia, current price, seasonally adjusted",
+      "data": {
+        "file": "dataset/abs/household_spending_1995_2025.csv",
+        "rows": 162,
+        "columns": [
+          "date",
+          "household_spending"
+        ]
+      },
+      "metadata": {
+        "file": "dataset/abs/household_spending_metadata.csv",
+        "rows": 1,
+        "columns": [
+          "Data Item Description",
+          "Series Type",
+          "Series ID",
+          "Series Start",
+          "Series End",
+          "No. Obs.",
+          "Unit",
+          "Data Type",
+          "Freq.",
+          "Collection Month",
+          "Table",
+          "Table Description",
+          "Catalogue number"
+        ]
+      }
+    }
+  ],
+  "rba": [
+    {
+      "variable": "cash_rate",
+      "table": "OCR",
+      "title": "Official Cash Rate, monthly",
+      "data": {
+        "file": "dataset/rba/cash_rate_1995_2025.csv",
+        "rows": 372,
+        "columns": [
+          "date",
+          "cash_rate"
+        ]
+      },
+      "metadata": null
+    },
+    {
+      "variable": "aud_usd_exchange_rate",
+      "table": "Z:F11.1-Monthly",
+      "title": "AUD/USD exchange rate",
+      "data": {
+        "file": "dataset/rba/aud_usd_exchange_rate_1995_2025.csv",
+        "rows": 192,
+        "columns": [
+          "date",
+          "FXRUSD"
+        ]
+      },
+      "metadata": {
+        "file": "dataset/rba/aud_usd_exchange_rate_metadata.csv",
+        "rows": 25,
+        "columns": [
+          "Title",
+          "Description",
+          "Frequency",
+          "Type",
+          "Units",
+          "Source",
+          "Publication date",
+          "Series ID",
+          "Table",
+          "Table Description"
+        ]
+      }
+    },
+    {
+      "variable": "inflation_expectations",
+      "table": "G3",
+      "title": "Inflation expectations",
+      "data": {
+        "file": "dataset/rba/inflation_expectations_1995_2025.csv",
+        "rows": 124,
+        "columns": [
+          "date",
+          "GCONEXP",
+          "GBUSEXP",
+          "GUNIEXPY",
+          "GUNIEXPYY",
+          "GMAREXPY",
+          "GMAREXPYY",
+          "GBONYLD"
+        ]
+      },
+      "metadata": {
+        "file": "dataset/rba/inflation_expectations_metadata.csv",
+        "rows": 7,
+        "columns": [
+          "Title",
+          "Description",
+          "Frequency",
+          "Type",
+          "Units",
+          "Source",
+          "Publication date",
+          "Series ID",
+          "Table",
+          "Table Description"
+        ]
+      }
+    },
+    {
+      "variable": "commodity_prices",
+      "table": "I2",
+      "title": "RBA commodity price indexes",
+      "data": {
+        "file": "dataset/rba/commodity_prices_1995_2025.csv",
+        "rows": 372,
+        "columns": [
+          "date",
+          "GRCPAIAD",
+          "GRCPAISDR",
+          "GRCPAIUSD",
+          "GRCPRCAD",
+          "GRCPRCSDR",
+          "GRCPRCUSD",
+          "GRCPNRAD",
+          "GRCPNRSDR",
+          "GRCPNRUSD",
+          "GRCPBMAD",
+          "GRCPBMSDR",
+          "GRCPBMUSD",
+          "GRCPBCAD",
+          "GRCPBCSDR",
+          "GRCPBCUSD",
+          "GRCPAISAD",
+          "GRCPAISSDR",
+          "GRCPAISUSD",
+          "GRCPBCSAD",
+          "GRCPBCSSDR",
+          "GRCPBCSUSD"
+        ]
+      },
+      "metadata": {
+        "file": "dataset/rba/commodity_prices_metadata.csv",
+        "rows": 21,
+        "columns": [
+          "Title",
+          "Description",
+          "Frequency",
+          "Type",
+          "Units",
+          "Source",
+          "Publication date",
+          "Series ID",
+          "Table",
+          "Table Description"
+        ]
+      }
+    }
+  ],
+  "yfinance": [
+    {
+      "variable": "wti_crude_oil",
+      "ticker": "CL=F",
+      "title": "WTI crude oil futures",
+      "data": {
+        "file": "dataset/market/wti_crude_oil_1995_2025.csv",
+        "rows": 6367,
+        "columns": [
+          "Date",
+          "Adj Close",
+          "Close",
+          "High",
+          "Low",
+          "Open",
+          "Volume"
+        ]
+      }
+    },
+    {
+      "variable": "brent_crude_oil",
+      "ticker": "BZ=F",
+      "title": "Brent crude oil futures",
+      "data": {
+        "file": "dataset/market/brent_crude_oil_1995_2025.csv",
+        "rows": 4585,
+        "columns": [
+          "Date",
+          "Adj Close",
+          "Close",
+          "High",
+          "Low",
+          "Open",
+          "Volume"
+        ]
+      }
+    }
+  ]
+}
