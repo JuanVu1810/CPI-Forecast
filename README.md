@@ -161,6 +161,16 @@ A future Streamlit dashboard could include:
 
 FastAPI is not necessary for the first version of the interface because it does not provide a visual dashboard by itself. It would become useful later if the project needs a model-serving backend, such as an endpoint that returns CPI forecasts to another application.
 
+If a more advanced multivariate forecasting framework is applied later, FastAPI should be considered as an optional deployment layer rather than a replacement for Streamlit. Streamlit would remain useful for exploration, EDA, model comparison, and portfolio demonstration. FastAPI would be useful if the trained model needs to be exposed through endpoints such as:
+
+```text
+POST /forecast
+GET /model-metrics
+GET /available-features
+```
+
+In that setup, Streamlit could act as the user-facing dashboard while FastAPI serves model predictions in the background.
+
 A possible future structure is:
 
 ```text
@@ -177,6 +187,40 @@ A possible future structure is:
 ```
 
 The recommended development path is to build the Streamlit dashboard first, then add FastAPI only if the forecasting model needs to be served through an API.
+
+## Advanced Forecasting Ideas From Recent Literature
+
+Recent multivariate time-series forecasting research highlights three ideas that are relevant to a future version of this CPI project: multiscale temporal modelling, external data augmentation, and careful evaluation of how external variables improve forecasts.
+
+Peng et al. (2025) propose MSP-EDA, a multivariate forecasting framework that combines multiscale patch representations with external data enhancement. Their model uses Fourier-based analysis to capture dominant global periodic patterns, wavelet-based analysis to capture local time-frequency variation, and attention mechanisms to learn temporal dependencies, cross-variable relationships, and the influence of external data.
+
+The full MSP-EDA deep learning architecture is probably too complex for the current CPI dataset because the project has a relatively small number of quarterly observations. However, several ideas from the framework can still strengthen this project:
+
+1. **Add multiscale CPI analysis**
+
+   Analyse CPI at several time scales instead of only modelling the quarterly index level. Useful views include quarter-to-quarter inflation, year-ended inflation, rolling 2-year averages, rolling 4-year averages, and seasonal quarterly patterns.
+
+2. **Add frequency-domain diagnostics**
+
+   Use Fourier or periodogram analysis to check dominant CPI cycles and confirm whether quarterly seasonality is strong. Wavelet analysis can be treated as an optional advanced EDA extension for detecting local changes in inflation behaviour during periods such as COVID or the post-COVID inflation surge.
+
+3. **Create an external-data quality score**
+
+   Before modelling, score each external variable based on coverage, missingness, frequency alignment, publication delay, and economic relevance. This makes the choice of SARIMAX predictors more transparent.
+
+4. **Evaluate forecasts by horizon**
+
+   Since the project forecasts 8 quarters ahead, model accuracy should be reported separately for each forecast horizon, not only as one overall RMSE. This can show whether external variables help short-term CPI forecasts, longer-term CPI forecasts, or both.
+
+5. **Run ablation studies by variable group**
+
+   Compare the baseline SARIMA model against several SARIMAX variants to test which groups of external variables improve forecast accuracy. Candidate groups include labour market variables, price-pressure variables, monetary and exchange-rate variables, commodity and oil variables, and all selected variables combined.
+
+6. **Analyse cross-variable relationships**
+
+   Translate the paper's attention-based variable-relationship idea into interpretable diagnostics suitable for this project, such as lag correlations, Granger causality tests, predictor correlation matrices, VIF scores, and model coefficient interpretation.
+
+These additions would make the next version more research-informed while keeping the modelling approach realistic for the available data size.
 
 ## Next Development Plan
 
@@ -244,3 +288,7 @@ python data_retrieval.py 1995 2025 --output-dir dataset
 ## Notes
 
 The notebook is the main submitted university project. The newer `data_retrieval.py` script is an update that improves reproducibility and prepares the repository for future model extensions using external economic indicators. The next modelling step is expected to be a new notebook or script that merges these datasets and tests whether external variables improve forecast performance.
+
+## References
+
+Peng, S., Sun, W., Chen, P., Xu, H., Ma, D., Chen, M., Wang, Y., & Li, H. (2025). MSP-EDA: Multivariate time series forecasting based on multiscale patches and external data augmentation. *Electronics, 14*(13), 2618. https://doi.org/10.3390/electronics14132618
