@@ -133,6 +133,51 @@ The planned EDA steps are:
 
 The EDA should finish with a clean quarterly modelling dataset, a variable coverage table, transformation decisions, candidate lag choices, multicollinearity diagnostics, and a justified shortlist of external predictors for SARIMAX.
 
+## Planned Interactive Interface
+
+The project should use **Streamlit** as the first interactive user interface. Streamlit is a good fit because this is primarily a data science and forecasting project where users need to explore datasets, view EDA charts, choose model settings, and inspect forecast outputs.
+
+A future Streamlit dashboard could include:
+
+1. **Overview**
+
+   Summarise the project goal, CPI forecasting objective, model choices, and key findings.
+
+2. **Data Explorer**
+
+   Display the available CPI, ABS, RBA, and market datasets, including date ranges, frequencies, row counts, missing values, and column descriptions.
+
+3. **EDA Dashboard**
+
+   Show CPI trends, quarterly and year-ended inflation, seasonal patterns, external indicator plots, correlation heatmaps, lag-correlation results, and stationarity test summaries.
+
+4. **Forecasting Interface**
+
+   Allow users to select a model type, forecast horizon, training window, and candidate external variables. The interface should display forecasts with confidence intervals and make it easy to compare SARIMA and SARIMAX outputs.
+
+5. **Model Evaluation**
+
+   Present RMSE, MSE, MAE, benchmark comparisons, rolling-window validation results, and residual diagnostics.
+
+FastAPI is not necessary for the first version of the interface because it does not provide a visual dashboard by itself. It would become useful later if the project needs a model-serving backend, such as an endpoint that returns CPI forecasts to another application.
+
+A possible future structure is:
+
+```text
+.
+├── app.py                     # Streamlit dashboard
+├── src/
+│   ├── data_processing.py      # Data loading, cleaning, merging, resampling
+│   ├── eda.py                  # EDA summaries and plotting helpers
+│   ├── modelling.py            # SARIMA, SARIMAX, and benchmark models
+│   └── forecasting.py          # Forecast generation and evaluation helpers
+├── dataset/
+├── README.md
+└── requirements.txt
+```
+
+The recommended development path is to build the Streamlit dashboard first, then add FastAPI only if the forecasting model needs to be served through an API.
+
 ## Next Development Plan
 
 The next stage of the project will extend `cpi_forecast_V1.ipynb` into a second modelling version. The planned improvements are:
